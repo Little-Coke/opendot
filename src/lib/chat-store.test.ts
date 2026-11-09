@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -14,6 +14,20 @@ describe("persistent conversation", () => {
   afterEach(() => {
     store.db.close();
     rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("tightens permissions on existing database files and directories", () => {
+    store.db.close();
+    chmodSync(directory, 0o755);
+    chmodSync(join(directory, "opendot.sqlite"), 0o644);
+    store = new ChatStore(directory);
+    expect(statSync(directory).mode & 0o777).toBe(0o700);
+    expect(statSync(join(directory, "opendot.sqlite")).mode & 0o777).toBe(
+      0o600,
+    );
+    expect(statSync(join(directory, "opendot.sqlite-wal")).mode & 0o777).toBe(
+      0o600,
+    );
   });
 
   it("restores completed turns after reopening the database", () => {

@@ -15,11 +15,14 @@ fi
 
 cd "$COMPOSE_DIR"
 
-if sudo docker image inspect opendot:local >/dev/null 2>&1; then
-  sudo docker tag opendot:local opendot:rollback
-  echo "已把当前镜像标为 opendot:rollback"
+# docker load may already have moved opendot:local to the new image.
+# The existing container still identifies the last deployed image exactly.
+previous_image="$(sudo docker inspect opendot --format '{{.Image}}' 2>/dev/null || true)"
+if [[ -n "$previous_image" ]] && sudo docker image inspect "$previous_image" >/dev/null 2>&1; then
+  sudo docker tag "$previous_image" opendot:rollback
+  echo "已把运行容器的镜像标为 opendot:rollback"
 else
-  echo "没有可回滚的 opendot:local"
+  echo "没有已有容器可用于回滚"
 fi
 
 if ! sudo docker image inspect "opendot:${SHA}" >/dev/null 2>&1; then

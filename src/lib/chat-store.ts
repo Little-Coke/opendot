@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Turn } from "./chat-types";
 
@@ -21,7 +21,10 @@ export class ChatStore {
 
   constructor(readonly directory: string) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    this.db = new DatabaseSync(join(directory, "opendot.sqlite"));
+    chmodSync(directory, 0o700);
+    const databasePath = join(directory, "opendot.sqlite");
+    this.db = new DatabaseSync(databasePath);
+    chmodSync(databasePath, 0o600);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA busy_timeout = 5000;
@@ -35,6 +38,13 @@ export class ChatStore {
       CREATE UNIQUE INDEX IF NOT EXISTS one_active_turn ON turns(status) WHERE status = 'pending';
       CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id = 1), value TEXT NOT NULL);
     `);
+    for (const suffix of ["-wal", "-shm"]) {
+      try {
+        chmodSync(`${databasePath}${suffix}`, 0o600);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
   }
 
   private expire() {
