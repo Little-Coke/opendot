@@ -62,19 +62,16 @@ sudo docker compose up -d --no-build
 
 数据卷名是 `opendot-data`。重新构建不会删它。
 
-## GitHub Actions
+## CI/CD
 
-`.github/workflows/ci.yml`：
+工作流在 `.github/workflows/ci.yml`。每次推送和拉取请求都会跑检查；推到 `main`，或在 Actions 里手动 Run workflow 并勾选部署，才会发布。
 
-- 拉取请求和推送：lint、类型检查、测试、构建
-- 推到 `main`：在 GitHub 上构建镜像，传到服务器后 `sudo docker load`，再 `sudo docker compose up -d --no-build`
+- 检查：lint、类型检查、测试、构建。npm 依赖走 Actions 缓存。测试覆盖率写在该任务的 Summary 里。
+- 密钥扫描：同一次运行用 gitleaks 扫仓库历史。扫到密钥就失败，并且不会部署。
+- 镜像：在 GitHub 上构建，标签是完整 commit SHA，同时打上 `opendot:local`。构建层缓存放在 Actions cache。服务器没有 Buildx，所以不在服务器上编译。
+- 部署互斥：生产部署共用一个队列，后一次会等前一次结束，不会两个一起改容器。
+- 健康检查：只在这台机器上请求 `http://127.0.0.1:3300/api/health`，要看到 `ok: true` 和 `app: opendot`。失败时把 `opendot:local` 指回部署前标好的 `opendot:rollback`，再启动一次，然后这次任务记为失败。
+- 清理：只删除较旧的 `opendot:<sha>` 标签，保留最近 5 个，以及正在使用的镜像和 `opendot:rollback`。不会 prune 其他项目的镜像，也不会动其他容器。
+- 依赖更新：Dependabot 每周为 npm 和 GitHub Actions 开拉取请求。
 
-仓库密钥：
-
-| 密钥 | 内容 |
-| --- | --- |
-| `DEPLOY_HOST` | 服务器地址 |
-| `DEPLOY_USER` | SSH 用户，例如 `ec2-user` |
-| `DEPLOY_SSH_KEY` | 部署私钥全文 |
-
-没有这三项时，检查任务仍会跑，部署任务会失败。不要把私钥或 API Key 提交进仓库。
+仓库密钥是 `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_SSH_KEY`。不要把私钥或 API Key 提交进仓库。

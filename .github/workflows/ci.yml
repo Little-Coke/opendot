@@ -3,52 +3,130 @@ name: CI
 on:
   pull_request:
   push:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 部署当前提交到服务器
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
-  verify:
+  secrets:
+    name: Secret scan
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz" | tar -xz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan repository
+        run: gitleaks detect --source . --redact --verbose --exit-code 1
+
+  verify:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:coverage
+      - name: Coverage summary
+        if: always()
+        run: |
+          node --input-type=module <<'EOF'
+          import { appendFileSync, readFileSync, existsSync } from "node:fs";
+          const summary = process.env.GITHUB_STEP_SUMMARY;
+          if (!summary) process.exit(0);
+          const path = "coverage/coverage-summary.json";
+          if (!existsSync(path)) {
+            appendFileSync(summary, "### Test coverage\n\n没有生成覆盖率报告。\n");
+            process.exit(0);
+          }
+          const total = JSON.parse(readFileSync(path, "utf8")).total;
+          const row = (name) => `| ${name} | ${total[name].pct}% | ${total[name].covered}/${total[name].total} |`;
+          appendFileSync(summary, [
+            "### Test coverage",
+            "",
+            "| 指标 | 覆盖率 | 已覆盖 |",
+            "| --- | --- | --- |",
+            row("lines"),
+            row("statements"),
+            row("functions"),
+            row("branches"),
+            "",
+          ].join("\n"));
+          EOF
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: verify
+    name: Deploy
+    needs: [verify, secrets]
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+    concurrency:
+      group: opendot-production
+      cancel-in-progress: false
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
       - name: Build image
-        run: docker build -t opendot:local .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          provenance: false
+          sbom: false
+          tags: opendot:${{ github.sha }},opendot:local
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Pack image
-        run: docker save opendot:local | gzip > /tmp/opendot-image.tar.gz
-      - name: Upload and restart
+        run: docker save "opendot:${{ github.sha }}" opendot:local | gzip > /tmp/opendot-image.tar.gz
+      - name: Upload, restart, and check health
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          IMAGE_SHA: ${{ github.sha }}
         run: |
           if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
-            echo "缺少 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY，跳过部署"
+            echo "缺少 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY"
             exit 1
           fi
           mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id
-          chmod 600 ~/.ssh/id
+          key=~/.ssh/opendot_deploy
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          trap 'rm -f "$key"' EXIT
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-          ssh -i ~/.ssh/id "$DEPLOY_USER@$DEPLOY_HOST" "sudo mkdir -p /opt/opendot && sudo chown $DEPLOY_USER:$DEPLOY_USER /opt/opendot"
-          rsync -az --delete \
-            --exclude node_modules --exclude .next --exclude .git --exclude data --exclude .env \
-            -e "ssh -i ~/.ssh/id" \
+          ssh_opts=(-i "$key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "sudo mkdir -p /opt/opendot && sudo chown $DEPLOY_USER:$DEPLOY_USER /opt/opendot"
+          rsync -az \
+            -e "ssh ${ssh_opts[*]}" \
             docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:/opt/opendot/docker-compose.yml"
-          scp -i ~/.ssh/id /tmp/opendot-image.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/opendot-image.tar.gz"
-          ssh -i ~/.ssh/id "$DEPLOY_USER@$DEPLOY_HOST" "gunzip -c /tmp/opendot-image.tar.gz | sudo docker load && rm -f /tmp/opendot-image.tar.gz && cd /opt/opendot && sudo docker compose up -d --no-build --remove-orphans"
+          scp "${ssh_opts[@]}" /tmp/opendot-image.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/opendot-image.tar.gz"
+          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "gunzip -c /tmp/opendot-image.tar.gz | sudo docker load && rm -f /tmp/opendot-image.tar.gz"
+          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- $IMAGE_SHA" < scripts/deploy-remote.sh
