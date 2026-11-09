@@ -1,0 +1,21 @@
+services:
+  opendot:
+    image: opendot:local
+    build: .
+    container_name: opendot
+    restart: unless-stopped
+    ports:
+      - "3300:3300"
+    environment:
+      DATA_DIR: /data
+      PORT: "3300"
+      HOSTNAME: 0.0.0.0
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENDOT_PASSWORD: ${OPENDOT_PASSWORD:-}
+    volumes:
+      - opendot-data:/data
+
+volumes:
+  opendot-data:

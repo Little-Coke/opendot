@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t opendot:local .
+      - name: Pack image
+        run: docker save opendot:local | gzip > /tmp/opendot-image.tar.gz
+      - name: Upload and restart
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "缺少 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY，跳过部署"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id
+          chmod 600 ~/.ssh/id
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id "$DEPLOY_USER@$DEPLOY_HOST" "sudo mkdir -p /opt/opendot && sudo chown $DEPLOY_USER:$DEPLOY_USER /opt/opendot"
+          rsync -az --delete \
+            --exclude node_modules --exclude .next --exclude .git --exclude data --exclude .env \
+            -e "ssh -i ~/.ssh/id" \
+            docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:/opt/opendot/docker-compose.yml"
+          scp -i ~/.ssh/id /tmp/opendot-image.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/opendot-image.tar.gz"
+          ssh -i ~/.ssh/id "$DEPLOY_USER@$DEPLOY_HOST" "gunzip -c /tmp/opendot-image.tar.gz | sudo docker load && rm -f /tmp/opendot-image.tar.gz && cd /opt/opendot && sudo docker compose up -d --no-build --remove-orphans"
