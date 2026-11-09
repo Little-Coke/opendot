@@ -2,20 +2,20 @@
 
 自托管的个人 AI 助手和团队。界面是简体中文。
 
-这个仓库按天推进，不要一次把规格做完。今天是第 1 天：能打开的中文骨架、检查和部署。后续每天做什么写在 [docs/ROADMAP.md](docs/ROADMAP.md)。
+当前已实现小点的真实流式对话、SQLite 历史保存、失败重试、登录和模型设置。后续计划见 [docs/ROADMAP.md](docs/ROADMAP.md)。
 
-没有配置模型时应用也要能打开。模型接入排在第 12 天，现在还不会回复。
+未配置模型时明确显示演示模式。接入 OpenAI 兼容服务后支持多轮真实对话，界面展示实际模型与返回的 Token 用量。
 
 ## 技术栈
 
 - Next.js 15、React 19、TypeScript
 - Tailwind CSS 4
-- Docker Compose，数据卷留给后面的 SQLite
+- Docker Compose，SQLite 数据与模型加密密钥存放在持久卷
 - Vitest
 
 ## 本地开发
 
-需要 Node.js 22。
+需要 Node.js 22.13 或更新版本（使用内置 node:sqlite）。
 
 ```bash
 npm install
@@ -36,16 +36,16 @@ npm start
 
 ## 环境变量
 
-样例在 `.env.example`。第 1 天都可以留空。
+样例在 `.env.example`。本地开发可不设置访问密码；生产环境必须配置 `OPENDOT_PASSWORD`，否则仅显示初始化提示。建议使用随机生成的长密码。
 
 | 变量 | 作用 |
 | --- | --- |
-| `DATA_DIR` | 以后的 SQLite 目录。本地默认 `./data`，容器里是 `/data`。 |
+| `DATA_DIR` | SQLite 和模型加密密钥目录。本地默认 `./data`，容器里是 `/data`。 |
 | `PORT` | 生产端口，容器里是 3300。 |
-| `OPENAI_BASE_URL` | 第 12 天使用。OpenAI 兼容地址，例如 `https://api.openai.com/v1`。 |
+| `OPENAI_BASE_URL` | OpenAI 兼容 API 地址，默认 `https://api.deepseek.com/v1`。 |
 | `OPENAI_API_KEY` | 留空就是演示模式。环境变量会优先于设置页。 |
-| `OPENAI_MODEL` | 模型名，默认 `gpt-4o-mini`。 |
-| `OPENDOT_PASSWORD` | 可选。设置后才要求登录。现在还没有登录页。 |
+| `OPENAI_MODEL` | 模型名，默认 `deepseek-flash`。 |
+| `OPENDOT_PASSWORD` | 生产环境必填的访问密码。使用 HttpOnly、SameSite=Strict 会话 Cookie，修改密码会使既有登录失效。 |
 
 ## 部署
 
@@ -75,3 +75,19 @@ sudo docker compose up -d --no-build
 - 依赖更新：Dependabot 每周为 npm 和 GitHub Actions 开拉取请求。
 
 仓库密钥是 `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_SSH_KEY`。不要把私钥或 API Key 提交进仓库。
+
+## 对话与模型配置
+
+登录后在「设置 → 模型提供商」填写 Base URL、模型名和 API Key，保存后返回小点对话。
+密钥使用 AES-256-GCM 加密保存，API 只返回是否已配置。填写空密钥会保留原值，勾选清除可以恢复演示模式。
+环境变量逐项优先于设置页。生产环境的环境变量文件应仅允许服务管理员读取。
+
+- Enter 发送，Shift + Enter 换行，中文输入法选词时不会误发送。
+- 消息以请求 ID 去重。重复提交不会生成第二轮，失败时可以重试最后一条消息。
+- 同一时间只生成一条回复。刷新页面会读取已保存的部分回复并跟踪状态，打开页面不会自动调用模型。
+- 默认带入最近最多 20 个成功回合，上下文文字上限 48000 字符。用户单条消息上限 8000 字符。
+- 模型请求 90 秒超时。服务重启后超过 120 秒无进展的回复会标记中断，可以重试。
+- 当前版本是一位服务所有者、一个主 Dot 的文字会话。工具执行、群聊和多用户 ACL 按路线图推进。
+
+备份时保存整个数据卷，包含 SQLite 主文件、WAL 和 `settings.key`。加密密钥与数据库应一起备份。
+公网访问建议由 HTTPS 入口承载。应用的 HTTP 端口与既有部署一致，为 3300。
