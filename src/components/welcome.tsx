@@ -20,7 +20,7 @@ export function MobileHome() {
           </span>
         </Link>
         <div className="kicker mt-6">自定义智能体</div>
-        <p className="mt-2 text-sm text-muted">自定义 Dot 即将开放。</p>
+        <Link href="/team" className="mt-2 inline-block text-sm text-accent">在团队页新建 Dot</Link>
       </div>
     </div>
   );
