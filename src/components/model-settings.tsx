@@ -30,9 +30,9 @@ export function ModelSettingsForm() {
     void load();
   }, []);
   return (
-    <div className="max-w-xl space-y-5 pb-8">
+    <div className="settings-layout">
       <form
-        className="card space-y-5 p-5"
+        className="settings-form space-y-6"
         onSubmit={async (event) => {
           event.preventDefault();
           setBusy(true);
@@ -68,7 +68,7 @@ export function ModelSettingsForm() {
         }}
       >
         <div>
-          <h2 className="font-semibold">模型提供商</h2>
+          <h2 className="settings-title">模型提供商</h2>
           <p className="mt-2 text-sm leading-6 text-muted">
             连接 OpenAI 兼容接口。API Key
             加密保存在服务端，留空会保留已保存的密钥。
@@ -129,10 +129,7 @@ export function ModelSettingsForm() {
           </label>
         )}
         <div className="flex items-center gap-4">
-          <button
-            className="rounded-xl bg-accent px-4 py-2 text-sm text-white disabled:opacity-50"
-            disabled={busy || !settings}
-          >
+          <button className="primary-button" disabled={busy || !settings}>
             {busy ? "正在保存…" : "保存模型设置"}
           </button>
           <Link className="text-sm text-accent" href="/c/xiaodian">
@@ -157,7 +154,7 @@ export function ModelSettingsForm() {
           </div>
         )}
       </form>
-      <div className="card space-y-3 p-5">
+      <div className="settings-aside space-y-4">
         <h2 className="font-semibold">访问与对话</h2>
         <p className="text-sm leading-6 text-muted">
           对话自动保存在服务器。一次回复完成后可以继续发送，刷新页面会恢复当前对话。

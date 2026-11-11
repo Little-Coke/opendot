@@ -1,5 +1,6 @@
 "use client";
 
+import { DotFace } from "./shell";
 import { useCallback, useEffect, useState } from "react";
 
 type AuthState = {
@@ -27,9 +28,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [load]);
   if (auth?.authenticated) return children;
   return (
-    <main className="grid min-h-dvh place-items-center bg-bg px-5 py-10">
+    <main className="login-page">
       <form
-        className="card w-full max-w-sm space-y-5 p-7"
+        className="login-card space-y-5"
         onSubmit={async (event) => {
           event.preventDefault();
           setBusy(true);
@@ -54,8 +55,18 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           }
         }}
       >
-        <div className="text-sm font-semibold text-accent">OpenDot</div>
-        <h1 className="text-2xl font-semibold">和小点继续对话</h1>
+        <div className="login-brand">
+          <DotFace />
+          OpenDot
+        </div>
+        <div className="login-heading">
+          <h1>
+            你的想法，
+            <br />
+            有了一个好伙伴。
+          </h1>
+          <p>登录个人空间，和小点继续对话。</p>
+        </div>
         {!auth && !error && (
           <p className="text-sm text-muted" role="status">
             正在连接服务端…

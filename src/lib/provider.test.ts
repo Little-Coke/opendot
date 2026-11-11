@@ -55,3 +55,20 @@ describe("OpenAI compatible streaming", () => {
     expect(() => normalizeBaseUrl("https://example.com/v1?token=x")).toThrow();
   });
 });
+
+it("ignores frames after the stream completion marker in the same chunk", async () => {
+  const result = await readCompletionStream(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"完整回复"}}]}\n\ndata: [DONE]\n\ndata: {"error":{"message":"late error"}}\n\n',
+          ),
+        );
+        controller.close();
+      },
+    }),
+    () => {},
+  );
+  expect(result.text).toBe("完整回复");
+});

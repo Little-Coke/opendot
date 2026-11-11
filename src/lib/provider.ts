@@ -26,7 +26,7 @@ export async function readCompletionStream(
   let finished = false;
   let doneMarker = false;
   function frame(line: string) {
-    if (!line.startsWith("data:")) return;
+    if (doneMarker || !line.startsWith("data:")) return;
     const data = line.slice(5).trim();
     if (!data) return;
     if (data === "[DONE]") {

@@ -42,7 +42,9 @@ export function WorkBoard() {
       if (!response.ok) throw new Error(result.error || "读取工作失败");
       setGoals(Array.isArray(result.goals) ? result.goals : []);
     } catch (failure) {
-      setLoadError(failure instanceof Error ? failure.message : "无法连接服务端");
+      setLoadError(
+        failure instanceof Error ? failure.message : "无法连接服务端",
+      );
     }
   }
 
@@ -68,7 +70,7 @@ export function WorkBoard() {
         持续推进的目标。新建后记为计划并保存在这台机器上，还不会自动开始执行。
       </p>
       <form
-        className="card mb-6 mt-4 min-w-0 space-y-4 p-4"
+        className="creation-form mb-6 mt-4 min-w-0 space-y-4"
         noValidate
         onSubmit={async (event) => {
           event.preventDefault();
@@ -106,7 +108,9 @@ export function WorkBoard() {
             pendingScroll.current = result.id;
             await load();
           } catch (failure) {
-            setFormError(failure instanceof Error ? failure.message : "创建失败，请重试");
+            setFormError(
+              failure instanceof Error ? failure.message : "创建失败，请重试",
+            );
           } finally {
             submitting.current = false;
             setBusy(false);
@@ -178,12 +182,12 @@ export function WorkBoard() {
           />
         </label>
         {full ? (
-          <p className="text-sm text-muted">已有 {GOAL_LIMIT} 个目标，暂时不能再新建。</p>
+          <p className="text-sm text-muted">
+            已有 {GOAL_LIMIT} 个目标，暂时不能再新建。
+          </p>
         ) : null}
-        {/* 全局 button 颜色规则会盖过 Tailwind 的 text-*，所以这里直接写字色。 */}
         <button
-          className="w-full rounded-full bg-ink px-4 py-2 text-sm disabled:opacity-60 sm:w-auto"
-          style={{ color: "var(--panel)" }}
+          className="primary-button w-full sm:w-auto"
           type="submit"
           disabled={busy || full}
         >
@@ -203,12 +207,20 @@ export function WorkBoard() {
       {loadError ? (
         <p className="mb-3 text-sm text-red-600" role="alert">
           {loadError}{" "}
-          <button className="underline" type="button" onClick={() => void load()}>
+          <button
+            className="underline"
+            type="button"
+            onClick={() => void load()}
+          >
             重试
           </button>
         </p>
       ) : null}
-      <div className="mt-4 flex min-w-0 flex-wrap gap-2 text-sm" role="tablist" aria-label="工作筛选">
+      <div
+        className="mt-4 flex min-w-0 flex-wrap gap-2 text-sm"
+        role="tablist"
+        aria-label="工作筛选"
+      >
         {WORK_FILTERS.map((item) => {
           const selected = filter === item.id;
           return (
@@ -226,7 +238,9 @@ export function WorkBoard() {
           );
         })}
       </div>
-      {!goals && !loadError ? <p className="mt-4 text-sm text-muted">正在读取工作…</p> : null}
+      {!goals && !loadError ? (
+        <p className="mt-4 text-sm text-muted">正在读取工作…</p>
+      ) : null}
       {goals && visible.length === 0 ? (
         <div className="mt-4 rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm leading-6 text-muted">
           {workEmptyMessage(filter)}
@@ -236,16 +250,28 @@ export function WorkBoard() {
         <div className="mt-4 space-y-3">
           <p className="text-xs text-muted">{visible.length} 项</p>
           {visible.map((item) => (
-            <article key={item.id} id={`goal-${item.id}`} className="card min-w-0 p-4">
+            <article
+              key={item.id}
+              id={`goal-${item.id}`}
+              className="card min-w-0 p-4"
+            >
               <div className="flex items-start gap-2">
-                <h2 className="min-w-0 flex-1 break-words font-medium">{item.goal}</h2>
+                <h2 className="min-w-0 flex-1 break-words font-medium">
+                  {item.goal}
+                </h2>
                 <span className="shrink-0 rounded-full bg-soft px-2 py-0.5 text-xs text-muted">
                   {workStatusLabel(item.status)}
                 </span>
               </div>
-              <p className="mt-2 break-words text-xs text-muted">工作区：{item.workspace}</p>
-              <p className="mt-1 break-words text-sm">下一步：{item.nextStep}</p>
-              <p className="mt-1 text-xs text-muted">最多执行 {item.maxRuns} 次</p>
+              <p className="mt-2 break-words text-xs text-muted">
+                工作区：{item.workspace}
+              </p>
+              <p className="mt-1 break-words text-sm">
+                下一步：{item.nextStep}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                最多执行 {item.maxRuns} 次
+              </p>
               <div className="mt-3 text-xs text-muted">完成条件</div>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
                 {item.criteria.map((criterion, index) => (

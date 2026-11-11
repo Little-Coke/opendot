@@ -1,29 +1,38 @@
 "use client";
-
 import Link from "next/link";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { DotFace } from "@/components/shell";
 
 export function MobileHome() {
   return (
-    <div className="flex h-full flex-col lg:hidden">
-      <header className="flex items-center gap-2 px-4 py-4 font-semibold">
-        <span className="grid h-8 w-8 place-items-center rounded-xl bg-ink text-xs text-panel">OD</span>
-        OpenDot
+    <main className="mobile-home lg:hidden">
+      <header className="mobile-brand">
+        <DotFace />
+        <span>OpenDot</span>
       </header>
-      <div className="px-4">
-        <div className="kicker">主智能体</div>
-        <Link href="/c/xiaodian" className="mt-2 flex items-center gap-3 rounded-2xl px-2 py-3">
-          <span className="scale-125"><DotFace /></span>
-          <span>
-            <span className="block font-medium">小点</span>
-            <span className="block text-xs text-muted">你的个人协调员</span>
-          </span>
-        </Link>
-        <div className="kicker mt-6">自定义智能体</div>
-        <Link href="/team" className="mt-2 inline-block text-sm text-accent">在团队页新建 Dot</Link>
+      <div className="mobile-home-heading">
+        <p>你的个人空间</p>
+        <h1>从一句话开始。</h1>
       </div>
-    </div>
+      <Link href="/c/xiaodian" className="assistant-card">
+        <span className="large-dot">
+          <DotFace />
+        </span>
+        <div>
+          <h2>小点</h2>
+          <p>聊想法，写内容，一起理清思路。</p>
+        </div>
+        <ArrowUpRight size={22} />
+        <span className="assistant-card-action">
+          继续对话
+          <ChevronRight size={18} />
+        </span>
+      </Link>
+      <Link href="/team" className="mobile-team-link">
+        查看我的 Dot
+        <ChevronRight size={17} />
+      </Link>
+    </main>
   );
 }
-
 export { ChatStage } from "./chat";

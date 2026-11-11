@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowLeft, ArrowUp, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DotFace } from "./shell";
 import { mergeHistory } from "@/lib/history";
@@ -29,9 +30,12 @@ export function ChatStage() {
   const pinned = useRef(true);
   const activeRequest = useRef<AbortController | null>(null);
   const readVersion = useRef(0);
+  const readsInFlight = useRef(0);
   const pending = turns.some((turn) => turn.status === "pending");
   const load = useCallback(async (signal?: AbortSignal) => {
+    if (activeRequest.current) return;
     const version = ++readVersion.current;
+    readsInFlight.current++;
     try {
       const response = await fetch("/api/chat", { cache: "no-store", signal });
       const data = await response.json();
@@ -42,32 +46,59 @@ export function ChatStage() {
       setSettings(snapshot.settings);
       setLoaded(true);
       setOnline(true);
+      setError("");
     } catch (failure) {
-      if (signal?.aborted) return;
+      if (signal?.aborted || version !== readVersion.current) return;
       setOnline(false);
       setError(failure instanceof Error ? failure.message : "无法连接服务端");
+    } finally {
+      readsInFlight.current--;
     }
   }, []);
   useEffect(() => {
     const abort = new AbortController();
     void load(abort.signal);
+    const version = readVersion;
     return () => {
       abort.abort();
+      version.current++;
       activeRequest.current?.abort();
     };
   }, [load]);
   useEffect(() => {
-    if (!pending || sending) return;
-    const interval = setInterval(() => void load(), 2000);
-    return () => clearInterval(interval);
-  }, [pending, sending, load]);
+    const reconnect = () => void load();
+    window.addEventListener("online", reconnect);
+    window.addEventListener("focus", reconnect);
+    const interval =
+      !sending && (pending || !online)
+        ? setInterval(
+            () => {
+              if (readsInFlight.current === 0) reconnect();
+            },
+            pending ? 2000 : 5000,
+          )
+        : undefined;
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("online", reconnect);
+      window.removeEventListener("focus", reconnect);
+    };
+  }, [pending, sending, online, load]);
   useEffect(() => {
     if (pinned.current && list.current)
       list.current.scrollTop = list.current.scrollHeight;
   }, [turns]);
 
   async function send(content: string, id = requestId(), retry = false) {
-    if (sending || pending || !content.trim()) return;
+    if (
+      !loaded ||
+      !online ||
+      activeRequest.current ||
+      sending ||
+      pending ||
+      !content.trim()
+    )
+      return;
     readVersion.current++;
     setSending(true);
     setError("");
@@ -144,6 +175,7 @@ export function ChatStage() {
         reader.releaseLock();
       }
       setOnline(true);
+      activeRequest.current = null;
       await load();
     } catch (failure) {
       if (abort.signal.aborted) return;
@@ -163,14 +195,14 @@ export function ChatStage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-panel px-4 py-3">
+    <div className="chat-stage">
+      <header className="chat-header">
         <Link
           href="/"
-          className="text-muted lg:hidden"
+          className="icon-button lg:hidden"
           aria-label="返回会话列表"
         >
-          ←
+          <ArrowLeft size={20} />
         </Link>
         <DotFace />
         <div className="min-w-0">
@@ -179,9 +211,13 @@ export function ChatStage() {
             {settings?.hasKey ? settings.model : "你的个人协调员 · 演示模式"}
           </div>
         </div>
-        <span className="ml-auto shrink-0 text-xs text-muted" role="status">
-          {online ? "已连接服务端" : loaded ? "连接已断开" : "正在连接…"}
+        <span className="connection-status" data-online={online} role="status">
+          <span className="connection-dot" />
+          {online ? "已连接服务端" : error ? "连接已断开" : "正在连接…"}
         </span>
+        <Link className="icon-button" href="/settings" aria-label="模型设置">
+          <Settings2 size={19} />
+        </Link>
       </header>
       {settings && !settings.hasKey && (
         <div className="border-b border-line bg-accent-soft px-4 py-2 text-center text-xs text-accent">
@@ -200,29 +236,32 @@ export function ChatStage() {
               element.scrollHeight - element.scrollTop - element.clientHeight <
               100;
         }}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-6"
+        className="chat-timeline"
         aria-label="对话消息"
       >
-        {turns.length === 0 ? (
-          <div className="flex min-h-full flex-col items-center justify-center text-center">
-            <span className="mb-5 scale-150">
+        {!loaded ? (
+          <p className="py-16 text-center text-sm text-muted" role="status">
+            {error ? "等待重新连接，消息将在连接恢复后加载" : "正在加载对话…"}
+          </p>
+        ) : turns.length === 0 ? (
+          <div className="chat-welcome">
+            <span className="welcome-dot">
               <DotFace />
             </span>
-            <h1 className="text-xl font-medium">今天需要我帮你处理什么？</h1>
+            <p className="welcome-intro">你好，我是小点</p>
+            <h1>今天，我们从哪里开始？</h1>
             <p className="mt-3 text-sm text-muted">
-              我是小点。可以一起讨论、写作，或梳理你的想法。
+              一个想法、一个问题，或者一件想完成的事。
             </p>
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl space-y-8">
+          <div className="message-list">
             {turns.map((turn, index) => (
-              <article key={turn.id} className="space-y-4">
+              <article key={turn.id} className="message-turn">
                 <div className="flex justify-end">
-                  <div className="max-w-[90%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-accent px-4 py-3 text-sm leading-7 text-white">
-                    {turn.content}
-                  </div>
+                  <div className="user-message">{turn.content}</div>
                 </div>
-                <div className="flex items-start gap-3">
+                <div className="assistant-message">
                   <span className="mt-1 shrink-0">
                     <DotFace />
                   </span>
@@ -230,7 +269,7 @@ export function ChatStage() {
                     <div className="mb-1 text-xs font-medium text-muted">
                       小点{turn.model === "演示模式" ? " · 演示回复" : ""}
                     </div>
-                    <div className="whitespace-pre-wrap break-words text-sm leading-7">
+                    <div className="assistant-reply">
                       {turn.reply ||
                         (turn.status === "pending"
                           ? "正在思考…"
@@ -247,7 +286,7 @@ export function ChatStage() {
                         {index === turns.length - 1 && (
                           <button
                             className="mt-2 rounded-lg border border-line px-3 py-1 text-ink disabled:opacity-50"
-                            disabled={sending || pending}
+                            disabled={!online || sending || pending}
                             onClick={() =>
                               void send(turn.content, turn.id, true)
                             }
@@ -270,7 +309,7 @@ export function ChatStage() {
           </div>
         )}
       </div>
-      <div className="shrink-0 px-4 pb-4 pb-safe">
+      <div className="composer-dock pb-safe">
         {error && (
           <div
             className="mx-auto mb-3 flex max-w-3xl items-center justify-between gap-3 text-sm text-red-600"
@@ -289,19 +328,19 @@ export function ChatStage() {
           </div>
         )}
         <form
-          className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-line bg-panel p-2 shadow-sm"
+          className="composer"
           onSubmit={(event) => {
             event.preventDefault();
             void send(draft);
           }}
         >
           <textarea
-            className="max-h-40 min-h-12 flex-1 resize-y bg-transparent px-2 py-3 text-sm outline-none"
+            className="max-h-40 min-h-12 min-w-0 flex-1 resize-y rounded-xl bg-transparent px-2 py-3 text-base outline-none sm:text-sm"
             rows={2}
             maxLength={8000}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="输入消息…"
+            placeholder="和小点说点什么…"
             aria-label="输入消息"
             onKeyDown={(event) => {
               if (
@@ -315,12 +354,12 @@ export function ChatStage() {
             }}
           />
           <button
-            className="mb-1 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="send-button"
             type="submit"
-            disabled={!loaded || sending || pending || !draft.trim()}
+            disabled={!loaded || !online || sending || pending || !draft.trim()}
             aria-label="发送"
           >
-            ↑
+            <ArrowUp size={21} strokeWidth={2.2} />
           </button>
         </form>
         <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted">
