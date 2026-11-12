@@ -1,0 +1,155 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  margin-top: 36px;
+}
+
+.section {
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.help {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  margin-top: 14px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  padding: 16px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions :global(.secondary-button),
+.actions :global(.primary-button) {
+  padding: 8px 12px;
+}
+
+.pairRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pairRow :global(.secondary-button) {
+  align-self: flex-start;
+  padding: 8px 12px;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.device {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  padding: 14px 16px;
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.online {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.offline {
+  background: #f4f0e8;
+  color: #8a6232;
+}
+
+.message {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ok {
+  color: #047857;
+}
+
+.bad {
+  color: #dc2626;
+}
