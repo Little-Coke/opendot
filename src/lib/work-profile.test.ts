@@ -3,11 +3,16 @@ import {
   CRITERIA_LIMIT,
   CRITERION_MAX,
   GOAL_MAX,
+  RUN_DURATION_MS,
   RUN_LIMIT_DEFAULT,
   RUN_LIMIT_MAX,
+  STEP_LIMIT,
   WORK_FILTERS,
+  executionBudgetLabel,
   filterGoals,
+  parseWorkAction,
   parseWorkInput,
+  runLimitLabel,
   workEmptyMessage,
   workStatusLabel,
   type WorkStatus,
@@ -31,7 +36,7 @@ describe("work goal input", () => {
       }),
     ).toEqual({
       ok: true,
-      value: { ...valid, maxRuns: RUN_LIMIT_DEFAULT },
+      value: { ...valid, maxRuns: RUN_LIMIT_DEFAULT, requiresDevice: false },
     });
     expect(parseWorkInput({ ...valid, criteria: [" 一条 ", "", " 另一条 "] })).toMatchObject({
       ok: true,
@@ -80,6 +85,48 @@ describe("work goal input", () => {
     ).toBe(false);
     expect(parseWorkInput(null).ok).toBe(false);
     expect(parseWorkInput(["不是对象"]).ok).toBe(false);
+  });
+
+  it("defaults the device flag to false and rejects anything that is not a boolean", () => {
+    expect(parseWorkInput(valid)).toMatchObject({ ok: true, value: { requiresDevice: false } });
+    expect(parseWorkInput({ ...valid, requiresDevice: true })).toMatchObject({
+      ok: true,
+      value: { requiresDevice: true },
+    });
+    for (const requiresDevice of ["需要", 1, 0, null]) {
+      const parsed = parseWorkInput({ ...valid, requiresDevice });
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) expect(parsed.error).toContain("设备");
+    }
+  });
+});
+
+describe("work run actions", () => {
+  it("accepts execution controls and checks evidence before it is stored", () => {
+    for (const action of ["start", "pause", "resume", "cancel", "step", "complete"] as const) {
+      expect(parseWorkAction({ action })).toEqual({ ok: true, value: { action } });
+    }
+    expect(parseWorkAction({ action: "evidence", kind: "note", note: " 纪要已写好 " })).toEqual({
+      ok: true,
+      value: { action: "evidence", kind: "note", note: "纪要已写好" },
+    });
+    expect(parseWorkAction({ action: "evidence", kind: "device", note: "读了手机相册" })).toMatchObject({
+      ok: true,
+      value: { kind: "device" },
+    });
+    expect(parseWorkAction({ action: "evidence", kind: "file", note: "一份文件" }).ok).toBe(false);
+    expect(parseWorkAction({ action: "evidence", kind: "note", note: "   " }).ok).toBe(false);
+    expect(parseWorkAction({ action: "evidence", kind: "note", note: "证".repeat(501) }).ok).toBe(false);
+    expect(parseWorkAction({ action: "evidence", kind: "note", note: "第一行\n第二行" }).ok).toBe(false);
+    expect(parseWorkAction({ action: "delete" }).ok).toBe(false);
+    expect(parseWorkAction(null).ok).toBe(false);
+    expect(executionBudgetLabel({ maxRuns: 10, runsUsed: 1 })).toBe("最多执行 10 次，已用 1 次");
+    expect(runLimitLabel()).toBe("本轮 0/12 步，最长 30 分钟");
+    expect(runLimitLabel({ steps: 2, maxSteps: STEP_LIMIT, maxDurationMs: RUN_DURATION_MS })).toBe(
+      "本轮 2/12 步，最长 30 分钟",
+    );
+    expect(STEP_LIMIT).toBe(12);
+    expect(RUN_DURATION_MS).toBe(30 * 60 * 1000);
   });
 });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { PageBody } from "@/components/shell";
 import {
@@ -10,9 +11,11 @@ import {
   NEXT_STEP_MAX,
   WORK_FILTERS,
   WORKSPACE_MAX,
+  executionBudgetLabel,
   filterGoals,
   matchesWorkFilter,
   parseWorkInput,
+  runStatusLabel,
   workEmptyMessage,
   workStatusLabel,
   type WorkFilterId,
@@ -31,6 +34,7 @@ export function WorkBoard() {
   const [workspace, setWorkspace] = useState("");
   const [nextStep, setNextStep] = useState("");
   const [maxRuns, setMaxRuns] = useState("10");
+  const [requiresDevice, setRequiresDevice] = useState(false);
   const submitting = useRef(false);
   const pendingScroll = useRef<string | null>(null);
 
@@ -67,7 +71,7 @@ export function WorkBoard() {
   return (
     <PageBody kicker="MY WORK" title="我的工作">
       <p className="text-sm leading-6 text-muted">
-        持续推进的目标。新建后记为计划并保存在这台机器上，还不会自动开始执行。
+        持续推进的目标。新建后记为计划并保存在这台机器上。打开一条委托可以开始、暂停、继续或取消；继续会沿用同一次执行。这一步只记录，还不会调用模型。
       </p>
       <form
         className="creation-form mb-6 mt-4 min-w-0 space-y-4"
@@ -82,6 +86,7 @@ export function WorkBoard() {
             workspace,
             nextStep,
             maxRuns: maxRuns.trim() === "" ? "" : Number(maxRuns),
+            requiresDevice,
           });
           if (!parsed.ok) {
             setFormError(parsed.error);
@@ -103,6 +108,7 @@ export function WorkBoard() {
             setWorkspace("");
             setNextStep("");
             setMaxRuns("10");
+            setRequiresDevice(false);
             setNotice(`已记下「${result.goal}」。`);
             if (!matchesWorkFilter(result.status, filter)) setFilter("all");
             pendingScroll.current = result.id;
@@ -180,6 +186,20 @@ export function WorkBoard() {
             placeholder="例如：先列出要整理的会议"
             onChange={(event) => setNextStep(event.target.value)}
           />
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            className="mt-1"
+            type="checkbox"
+            checked={requiresDevice}
+            onChange={(event) => setRequiresDevice(event.target.checked)}
+          />
+          <span>
+            这个委托需要设备
+            <span className="mt-1 block text-xs leading-5 text-muted">
+              标记完成时，除了证据，还要有设备证据。
+            </span>
+          </span>
         </label>
         {full ? (
           <p className="text-sm text-muted">
@@ -270,7 +290,9 @@ export function WorkBoard() {
                 下一步：{item.nextStep}
               </p>
               <p className="mt-1 text-xs text-muted">
-                最多执行 {item.maxRuns} 次
+                {executionBudgetLabel(item)}
+                {item.requiresDevice ? " · 需要设备" : ""}
+                {item.runStatus ? ` · ${runStatusLabel(item.runStatus)}` : ""}
               </p>
               <div className="mt-3 text-xs text-muted">完成条件</div>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
@@ -280,6 +302,9 @@ export function WorkBoard() {
                   </li>
                 ))}
               </ul>
+              <Link className="mt-3 inline-block text-sm text-accent" href={`/work/${item.id}`}>
+                查看详情
+              </Link>
             </article>
           ))}
         </div>
